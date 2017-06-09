@@ -64,6 +64,24 @@ ROS Kinetic, 如果你用的是Ubuntu 14，则需要适配Ros indigo，只需
 
     sudo apt-get install python-rosinstall
 
+**Ubuntu 14.04 LTS 安装ROS出现依赖无法安装的解决办法:**
+
+我是因为之后换用ROS indigo 版本，安装时遇到这个问题，搜遍网上所说，这个才解决了
+
+我的问题. 先给出原文[链接](https://my.oschina.net/lvzht/blog/645873)https://my.oschina.net/lvzht/blog/645873
+
+如果你不想看原文，那就看下面我总结的步骤：
+
+	sudo dpkg --clear-avail
+	sudo dpkg --configure -a
+	sudo apt-get install -f
+	sudo apt-get update
+	sudo apt-get upgrade
+
+	sudo apt-get install ros-indigo-desktop-full
+
+上面指令一条条执行，应该就能解决ROS indigo版本安装时的依赖问题
+
 --------------------------------------------------------------------
 
 # ROS学习之路--第二篇: 运行小海龟
@@ -126,7 +144,9 @@ ROS Kinetic, 如果你用的是Ubuntu 14，则需要适配Ros indigo，只需
 
     sudo apt-get install ros-kinetic-turtlebot ros-kinetic-turtlebot-apps ros-kinetic-turtlebot-interactions ros-kinetic-turtlebot-simulator ros-kinetic-kobuki-ftdi ros-kinetic-rocon-remocon ros-kinetic-rocon-qt-library ros-kinetic-ar-track-alvar-msgs
 
-现在驱动Kobuki底座的软件包已经安装好，下面就开始测试
+注意由于kinetic可能缺少上面列表中的某些支持包，所以如果出现这种情况，暂且略过
+
+即可，现在驱动Kobuki底座的软件包已经安装好，下面就开始测试
 
 首先用USB线将Kobuki连接到电脑,将Kobuki电源打开，灯会亮，而且会有提示声音,
 
@@ -158,13 +178,19 @@ Kinect分为1和2,我这里使用的是Kinect1,原理上应该是一样的，Kin
 
     sudo apt-get install ros-kinetic-openni-camera ros-kinetic-openni-launch
 
+，另外也可以用freenect驱动，openni_kinect经常会出现无法连接设备的情况，具体
+
+如下:
+
+	sudo apt-get install freenect
+
 上面完成之后，可以对Kinect进行测试:
 
 RGB图像:
 
 运行Kinect节点:
 
-    roslaunch rbx1_vision openni_node_kinetic.launch
+    roslaunch freenect_launch freenect.launch
 
 新打开终端
 
@@ -174,7 +200,7 @@ RGB图像:
 
 运行Kinect节点(经过试验,此步骤必须):
 
-    roslaunch openni_launch openni.launch
+    roslaunch freenect_launch freenect.launch
 
 新打开终端
 
@@ -459,7 +485,7 @@ roscore结束之后才会执行,但是我们知道roscore运行之后会一直�
 
 ---------------------------------------------------------------------------
 
-# 自主导航的仿真实现
+# ROS学习之路--第七篇：自主导航的仿真实现
 
 在学习本节之前，大家一定要学好ROS Wiki上的新手教程，不然bug真的不要太多，我是
 
@@ -477,7 +503,7 @@ roscore结束之后才会执行,但是我们知道roscore运行之后会一直�
 
 ![navigation-with-obstacles](../images/ROS/obstacles.png)
 
-![auto-navigation](..images/ROS/auto-navigation.png)
+![auto-navigation](../images/ROS/auto-navigation.png)
 
 首先是不用地图导航，相当于用空白地图导航，然后是用简单障碍物阻挡进行导航，最后
 
@@ -543,5 +569,130 @@ rbx1_nav文件夹下都有哪些rviz文件,选择一个就行，然后我们应�
 
 然后就可以看到效果啦
 	
+# ROS学习之路--第八篇：利用Kinect摄像头构建地图
+
+本节使用的工具包有 turtlebot, freenect驱动
+
+	sudo apt-get install ros-indigo-turtlebot*
+	sudo apt-get install freenect
+
+首先确认你已经正确安装这两个设备的驱动文件，可用roscd命令进行测试:
+
+	roscd turtlebot_launch
+	roscd turtlebot_teleop
+	roscd turtlebot_navigation
+	roscd turtlebot_rviz_launchers
+	roscd freenect_launch
+	
+如果上面命令都能正确进入相应的包路径，则证明已经安装成功，可以继续
+
+导航分为两个过程，构建地图和自主运行，下面先讲怎样用Kinect构建地图
+
+在这里需要注意，在开始构建地图之前，由于上面turtlebot_navigation包
+
+里面默认使用的摄像头是华硕asus_xtion_pro,因此我们需要修改默认值为kinect，
+
+先看turtlebot_navigation/launch/文件夹下的gmapping_demo.launch文件
+
+	<launch>
+	  <!-- 3D sensor -->
+	  <arg name="3d_sensor" default="$(env TURTLEBOT_3D_SENSOR)"/>  <!-- r200, kinect, asus_xtion_pro -->
+	  <include file="$(find turtlebot_bringup)/launch/3dsensor.launch">
+	  	<arg name="rgb_processing" value="false" />
+	  	<arg name="depth_registration" value="false" />
+	  	<arg name="depth_processing" value="false" />
+	  
+	  	<!-- We must specify an absolute topic name because if not it will be prefixed by "$(arg camera)".
+	  	Probably is a bug in the nodelet manager: https://github.com/ros/nodelet_core/issues/7 -->
+	  
+	  	<arg name="scan_topic" value="/scan" />
+	  
+	  </include>
+	  
+	  <!-- Gmapping -->
+	  <arg name="custom_gmapping_launch_file" default="$(find turtlebot_navigation)/launch/includes/gmapping/$(arg 3d_sensor)_gmapping.launch.xml"/>
+	  <include file="$(arg custom_gmapping_launch_file)"/>
+	  
+	  <!-- Move base -->
+	  <include file="$(find turtlebot_navigation)/launch/includes/move_base.launch.xml"/>
+
+	</launch>
+
+
+从上面可以看出由于我们最后要加载/turtlebot_navigation/launch/includes/gmapping/下对应的
+
+xml文件，因此，我们可以先看下这个目录中都有那些文件，发现文件列表如下:
+
+	astra_gmapping.launch.xml   
+	asus_xtion_pro_offset_gmapping.launch.xml  
+	kinect_gmapping.launch.xml  
+	asus_xtion_pro_gmapping.launch.xml  
+	gmapping.launch.xml 
+	r200_gmapping.launch.xml
+
+可以看到有许多3d传感器的驱动文件,我们要用的是kinect驱动文件，因此这里需要启动
+
+kinect_gmapping.launch.xml，如何才能做到这一点，看下程序中<!-- Gmapping  -->
+
+下对应的一句 /gmapping/$(arg 3d_sensor)_gmapping.launch.xml，因此我们需要
+
+将变量3d_sensor的值设为kinect, 而3d_sensor的值来源于上面第二句的TUTLEBOT_3D_SENSOR环境变量
+
+因此，在终端返回这个值查看其值:
+
+	echo $TURTLEBOT_3D_SENSOR
+
+默认情况下，其使用的值是asus_xtion_pro,这里我们需要将其改为kinect
+
+更改环境变量应该不陌生了,在主目录下打开.bashrc文件，添加一句:
+
+	export TURTLEBOT_3D_SENSOR="kinect"
+
+然后关闭所有并重启终端，或者在主目录下重新source一下.bashrc：
+
+	source .bashrc
+	
+这时我们的准备工作就做好了.
+
+下面开始用Kinect构建地图:
+
+先将Kinect和kobuki固定在一起，防止kobuki移动时Kinect抖动太剧烈
+
+然后与之前一样，启动kobuki并用键盘控制运动以构建地图:
+
+	roslaunch turtlebot_bringup minimal.launch
+	roslaunch turtlebot_teleop keyboard_teleop.launch
+
+启动构建地图程序，注意这个时候就不要再用freenect驱动了，因为源码显示，地图
+
+构建程序里面已经包含此启动步骤,如果重复启动，会两边都报错：
+
+	roslaunch turtlebot_navigation gmapping_demo.launch
+
+然后可以在rviz中查看建图结果:
+
+	roslaunch turtlebot_rviz_launchers view_navigation.launch
+
+然后切换到键盘控制kobuki的终端，让kobuki和Kinect运动起来，即可看到地图一点点
+
+扩大,直到完成.
+
+![map-constructing](../images/ROS/kinect-map.png)
+
+建完之后，保存地图:
+
+	rosrun map_server map_saver -f ~/my_map
+
+这里我保存到了主目录下，命名为my_map,当然也可以保存到其它目录
+
+在主目录下查看可以看到两个地图文件
+
+	my_map.yaml, my_map.pgm
+
+这就是我们随后导航需要的地图，到此，利用Kinect建立地图已经完成了.
+
+---------------------------------------------------------------------
+
+# ROS学习之路--第九篇:完成kobuki的自主行走
 
 TODO
